@@ -1,11 +1,12 @@
+import { icon } from './icons.js';
 import { createInitialState, transition, getEvaluation, getEvaluationBaseline, canPublish, restoreState, TEMPLATES, templateTypeOf, getMonitorMode, getExperimentReadout, getMonitorSeries, getRunMeta, SKELETON, MODULES } from './logic.js';
 
 const STORAGE_KEY = 'agent-studio-demo-v6';
 const app = document.querySelector('#app');
 const profile = {
-  a: { letter: 'A', icon: '✳', type: '用户互动 · 实时', accent: 'coral', blurb: '根据场景生成穿搭灵感，并推荐社区同款笔记。' },
-  b: { letter: 'B', icon: '◇', type: '内容治理 · 批量', accent: 'blue', blurb: '输出类别、理由和政策依据，辅助人工判定。' },
-  c: { letter: 'C', icon: '▣', type: '客服辅助 · 多轮', accent: 'green', blurb: '基于售后知识拟答，并给出可核对的来源。' },
+  a: { letter: 'A', icon: icon('outfit'), type: '用户互动 · 实时', accent: 'coral', blurb: '根据场景生成穿搭灵感，并推荐社区同款笔记。' },
+  b: { letter: 'B', icon: icon('shield'), type: '内容治理 · 批量', accent: 'blue', blurb: '输出类别、理由和政策依据，辅助人工判定。' },
+  c: { letter: 'C', icon: icon('chat'), type: '客服辅助 · 多轮', accent: 'green', blurb: '基于售后知识拟答，并给出可核对的来源。' },
 };
 const mockTeams = ['社区体验团队','社区生态团队','电商服务团队','内容运营团队','用户增长团队','搜索推荐团队','商业化团队','客户服务团队','风控与安全团队','基础架构团队'];
 const views = [
@@ -54,9 +55,21 @@ const pct = value => `${(value * 100).toFixed(1)}%`;
 const signed = value => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 
 function update(action) {
+  const previousView = state.view;
+  const focused = document.activeElement;
+  const focusId = focused?.id;
+  const focusData = focused?.dataset ? { ...focused.dataset } : null;
   state = transition(state, action);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render();
+  if (state.view !== previousView) {
+    app.querySelector('main')?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0 });
+  } else if (focusId) {
+    document.getElementById(focusId)?.focus({ preventScroll: true });
+  } else if (focusData?.action) {
+    [...app.querySelectorAll('[data-action]')].find(el => !el.disabled && Object.entries(focusData).every(([key,value]) => el.dataset[key] === value))?.focus({ preventScroll: true });
+  }
 }
 
 function getBadge(status) {
@@ -82,49 +95,53 @@ function draftHint(agent) {
 }
 
 function renderSidebar() {
-  return `<aside class="sidebar">
-    <div class="brand"><div class="brand-mark">✳</div><div><strong>Agent Studio</strong><small>企业 Agent 基建平台</small></div></div>
+  const managing = !['overview', 'platform'].includes(state.view);
+  return `<a class="skip-link" href="#main-content">跳到主内容</a><aside class="sidebar">
+    <div class="brand"><div class="brand-mark">${icon('studio')}</div><div><strong>Agent Studio</strong><small>企业 Agent 基建平台</small></div></div>
+    <div class="space-label">工作空间 <span class="workspace-chip">个人演示</span></div>
     <nav aria-label="主导航">
-      <button class="side-link ${state.view === 'overview' ? 'active' : ''}" data-action="overview"><span class="nav-icon">◫</span>Agent 工作台</button>
-      <button class="side-link ${state.view === 'manage' ? 'active' : ''}" data-action="manage"><span class="nav-icon">◇</span>Agent 管理</button>
-      <button class="side-link ${state.view === 'platform' ? 'active' : ''}" data-action="platform"><span class="nav-icon">⌘</span>平台能力地图</button>
+      <button class="side-link ${state.view === 'overview' ? 'active' : ''}" ${state.view === 'overview' ? 'aria-current="page"' : ''} data-action="overview">${icon('grid')}<span>工作台</span></button>
+      <button class="side-link ${managing ? 'active' : ''}" ${managing ? 'aria-current="page"' : ''} data-action="manage">${icon('layers')}<span>Agent 管理</span><span class="nav-count">${Object.keys(state.agents).length}</span></button>
+      <button class="side-link ${state.view === 'platform' ? 'active' : ''}" ${state.view === 'platform' ? 'aria-current="page"' : ''} data-action="platform">${icon('map')}<span>平台能力地图</span></button>
     </nav>
-    <div class="sidebar-bottom"><div class="demo-label"><span class="demo-pulse"></span> 演示数据 · 本地状态</div><button class="reset-link" data-action="reset">重置演示</button></div>
+    <div class="sidebar-bottom"><div class="local-info"><span class="demo-pulse"></span><div><strong>演示工作空间</strong><small>模拟数据 · 进度保存于本地</small></div></div><button class="reset-link" data-action="reset">${icon('reset')}重置演示</button></div>
   </aside>`;
 }
 
 function renderTopbar() {
-  const title = state.view === 'overview' ? 'Agent 工作台' : state.view === 'manage' ? 'Agent 管理' : state.view === 'platform' ? '平台能力地图' : ['templates','create'].includes(state.view) ? '新建 Agent' : state.agents[state.selectedAgent]?.name ?? 'Agent 管理';
-  return `<header class="topbar"><div class="breadcrumb"><button class="crumb-home" data-action="overview">平台</button><b>/</b><span>${escapeHtml(title)}</span></div><div class="top-actions"><span class="demo-pill">演示数据</span><button class="mobile-reset" data-action="reset" aria-label="重置演示">重置</button><span class="avatar">PM</span></div></header>`;
+  const title = state.view === 'overview' ? '工作台' : state.view === 'manage' ? 'Agent 管理' : state.view === 'platform' ? '平台能力地图' : ['templates','create'].includes(state.view) ? '新建 Agent' : state.agents[state.selectedAgent]?.name ?? 'Agent 管理';
+  return `<header class="topbar"><div class="breadcrumb"><button class="crumb-home" data-action="overview">工作空间</button><b>/</b><span>${escapeHtml(title)}</span></div><div class="top-actions"><span class="demo-pill"><span class="badge-dot"></span>演示数据</span><button class="mobile-reset" data-action="reset" aria-label="重置演示">重置</button><span class="avatar" aria-label="演示用户 PM">PM</span></div></header>`;
 }
 
 function renderAgentCard(id, agent) {
   const info = profileFor(id);
-  return `<button class="agent-card" data-action="selectAgent" data-agent="${escapeHtml(id)}">
-    <div class="card-top"><span class="agent-avatar ${info.accent}">${info.icon}</span><span class="card-arrow">↗</span></div>
-    <div class="agent-meta">${info.type}${agent.isExample ? ' · 示例' : ' · 自建'}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.taskDescription ?? info.blurb)}</p>
-    <div class="card-divider"></div><div class="card-bottom">${getBadge(agentStatus(id, agent))}<span>生产 ${agent.liveVersion ?? '未发布'}</span></div>
+  const focuses = { a: '灰度发布与效果对比', b: '质量门槛与人工审批', c: '知识更新与引用追溯' };
+  return `<button class="agent-card ${info.accent}" data-action="selectAgent" data-agent="${escapeHtml(id)}">
+    <div class="card-top"><span class="agent-avatar ${info.accent}">${info.icon}</span><span class="card-kind">${agent.isExample ? `场景 ${info.letter}` : '自建 Agent'}</span><span class="card-arrow">${icon('arrow')}</span></div>
+    <div class="agent-meta">${info.type}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.taskDescription ?? info.blurb)}</p>
+    <div class="card-focus">${focuses[typeFor(id)]}</div>
+    <div class="card-bottom">${getBadge(agentStatus(id, agent))}<span>${agent.liveVersion ?? '未发布'}</span></div>
     <div class="card-draft">${escapeHtml(draftHint(agent))}</div>
   </button>`;
 }
 
 function renderOverview() {
-  const examples = ['a','b','c'].map(id => renderAgentCard(id, state.agents[id])).join('');
+  const all = Object.values(state.agents);
   const recent = Object.entries(state.agents).filter(([, agent]) => !agent.isExample).reverse().slice(0, 3);
-  const mvpCount = MODULES.filter(item => item.phase === 'mvp').length;
-  return `<section class="page-head with-action"><div><h1>Agent 工作台</h1><p>从模板创建业务 Agent，完成调试、评估与发布。</p></div><button class="btn btn-primary create-main" data-action="newAgent">＋ 新建 Agent</button></section>
-    <section class="overview-stats" aria-label="平台概览"><div><strong>${String(Object.keys(state.agents).length).padStart(2,'0')}</strong><span>Agent 总数</span></div><div><strong>03</strong><span>业务模板</span></div><div><strong>${String(mvpCount).padStart(2,'0')}</strong><span>MVP 模块</span></div><div class="stat-note">当前为需求评审原型<br />所有运行和指标数据均为模拟</div></section>
-    <div class="section-heading"><div><h2>直接体验三个示例</h2></div></div>
-    <section class="agent-grid" aria-label="示例 Agent">${examples}</section>
-    ${recent.length ? `<div class="section-heading recent-heading"><div><h2>最近创建</h2></div><button class="text-action" data-action="manage">查看全部 →</button></div><section class="agent-grid" aria-label="最近 Agent">${recent.map(([id, agent]) => renderAgentCard(id, agent)).join('')}</section>` : ''}
-    <section class="overview-bottom"><div class="lifecycle-card"><div class="section-heading compact"><div><h2>共用一套交付流程</h2></div><button class="text-action" data-action="platform">模块清单与 MVP 边界 →</button></div><div class="lifecycle">${views.map(([view,label],i)=>`<button class="life-step" data-action="lifeStep" data-view="${view}"><span>${String(i+1).padStart(2,'0')}</span><strong>${label}</strong></button>`).join('')}</div></div>
-      <button class="review-card review-entry" data-action="reviewB"><div class="review-icon">◉</div><div><h3>从失败拦截开始评审 →</h3><p>生态守护 Agent 的严重样本漏判如何阻断发布。</p></div></button></section>`;
+  const counts = [[all.length, '全部 Agent', 'layers'], [all.filter(a => a.liveVersion && a.status !== '人工兜底').length, '已上线', 'activity'], [all.filter(a => a.evaluation === 'passed' && a.draftVersion !== a.liveVersion).length, '评估通过 · 待发布', 'check'], [all.filter(a => a.evaluation === 'failed' || a.evaluation === 'stale').length, '需重新评估', 'file']];
+  return `<section class="page-head with-action"><div><h1>Agent 工作台</h1><p>把业务想法，变成可持续迭代的 Agent。</p></div><button class="btn btn-primary create-main" data-action="newAgent">${icon('plus')}新建 Agent</button></section>
+    <section class="overview-stats" aria-label="平台概览">${counts.map(([count,label,symbol])=>`<div><span class="stat-label">${label}${icon(symbol)}</span><strong>${String(count).padStart(2,'0')}</strong></div>`).join('')}</section>
+    <div class="section-heading"><div><h2>从一个业务场景开始 <span class="section-count">3</span></h2><p>同一套基础能力，适配不同的业务需求。</p></div><button class="text-action" data-action="manage">全部 Agent ${icon('arrow')}</button></div>
+    <section class="agent-grid" aria-label="示例 Agent">${['a','b','c'].map(id => renderAgentCard(id, state.agents[id])).join('')}</section>
+    <button class="review-card review-entry" data-action="reviewB"><span class="review-icon">${icon('shield')}</span><div><span class="review-label">推荐评审路径</span><h3>一次未通过的评估，如何拦住风险上线？</h3><p>生态守护：发现漏判 → 修复规则 → 重评审批 → 发布</p></div><span class="review-link">开始体验 ${icon('arrow')}</span></button>
+    ${recent.length ? `<div class="section-heading recent-heading"><div><h2>最近创建</h2></div><button class="text-action" data-action="manage">查看全部 ${icon('arrow')}</button></div><section class="agent-grid" aria-label="最近 Agent">${recent.map(([id, agent]) => renderAgentCard(id, agent)).join('')}</section>` : ''}
+    <section class="lifecycle-card"><div class="section-heading compact"><div><h2>从创建到迭代，六步走通</h2></div><button class="text-action" data-action="platform">查看共用能力 ${icon('arrow')}</button></div><div class="lifecycle">${views.map(([view,label],i)=>`<button class="life-step" data-action="lifeStep" data-view="${view}"><span>${String(i+1).padStart(2,'0')}</span><strong>${label}</strong>${i<5?icon('arrow'):''}</button>`).join('')}</div></section>`;
 }
 
 function renderManage() {
-  return `<section class="page-head with-action"><div><h1>Agent 管理</h1><p>查看全部 Agent，或从模板新建。</p></div><button class="btn btn-primary create-main" data-action="newAgent">＋ 新建 Agent</button></section>
-    <div class="section-heading"><div><h2>全部 Agent · ${Object.keys(state.agents).length}</h2></div></div>
-    <section class="agent-grid" aria-label="全部 Agent">${Object.entries(state.agents).map(([id, agent]) => renderAgentCard(id, agent)).join('')}</section>`;
+  return `<section class="page-head with-action"><div><h1>Agent 管理</h1><p>管理业务 Agent 的配置、版本与上线状态。</p></div><button class="btn btn-primary create-main" data-action="newAgent">${icon('plus')}新建 Agent</button></section>
+    <section class="panel manage-panel"><div class="manage-toolbar"><h2>全部 Agent <span class="section-count">${Object.keys(state.agents).length}</span></h2><label class="search-field">${icon('search')}<input id="agent-search" type="search" placeholder="搜索名称或团队" aria-label="搜索 Agent 名称或团队" /></label></div>
+    <div class="agent-table"><div class="agent-table-head"><span>Agent / 所属团队</span><span>业务模板</span><span>生产状态</span><span>当前草稿</span><span></span></div>${Object.entries(state.agents).map(([id,agent])=>{const info=profileFor(id);return `<button class="agent-table-row" data-action="selectAgent" data-agent="${escapeHtml(id)}" data-search="${escapeHtml(`${agent.name} ${agent.team}`.toLowerCase())}"><span class="list-identity"><span class="agent-avatar ${info.accent}">${info.icon}</span><span><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.team)}</small></span></span><span class="list-type">${info.type}</span><span class="list-status">${getBadge(agentStatus(id,agent))}<small>${agent.liveVersion ?? '未发布'}</small></span><span class="list-draft">${escapeHtml(draftHint(agent))}</span><span class="card-arrow">${icon('arrow')}</span></button>`;}).join('')}</div><div class="search-empty" hidden>没有匹配的 Agent，试试其他名称或团队。</div></section>`;
 }
 
 function renderPlatform() {
@@ -155,7 +172,7 @@ function renderPlatform() {
 
 function renderTemplates() {
   return `<section class="page-head"><button class="back-link" data-action="manage">← 返回 Agent 管理</button><h1>选择业务模板</h1><p>模板预填调用形态、输出格式和知识或规则。</p></section>
-    <section class="agent-grid" aria-label="模板列表">${Object.keys(TEMPLATES).map(type => { const info = profile[type]; const base = state.agents[type]; return `<button class="agent-card template-card" data-action="chooseTemplate" data-template="${type}"><div class="card-top"><span class="agent-avatar ${info.accent}">${info.icon}</span><span class="card-arrow">选择 →</span></div><div class="agent-meta">${info.type}</div><h3>${base.name}</h3><p>${escapeHtml(TEMPLATES[type].taskDescription)}</p><div class="card-divider"></div><div class="template-foot">输出：${escapeHtml(TEMPLATES[type].outputFormat)}</div></button>`; }).join('')}</section>`;
+    <section class="agent-grid" aria-label="模板列表">${Object.keys(TEMPLATES).map(type => { const info = profile[type]; const base = state.agents[type]; return `<button class="agent-card template-card" data-action="chooseTemplate" data-template="${type}"><div class="card-top"><span class="agent-avatar ${info.accent}">${info.icon}</span><span class="card-arrow">${icon("arrow")}</span></div><div class="agent-meta">${info.type}</div><h3>${base.name}</h3><p>${escapeHtml(TEMPLATES[type].taskDescription)}</p><div class="card-divider"></div><div class="template-foot">输出：${escapeHtml(TEMPLATES[type].outputFormat)}</div></button>`; }).join('')}</section>`;
 }
 
 function debugPromptPresets(type, agent) {
@@ -190,17 +207,17 @@ function renderCreate() {
 
 /** Read-only block that spells out what the platform hosts so business teams do not build it. */
 function renderHostedCapabilities() {
-  return `<div class="hosted-box"><div class="hosted-title">平台托管能力 <span>业务方零搭建</span></div>
-    ${[['统一模型网关','已接入 · 无需自行申请密钥'],['鉴权与团队配额','按团队分配 · 演示值'],['限流与降级','大促自动排队 · 演示'],['日志与调用追溯','默认开启 · 保留 30 天'],['成本核算','按调用计费 · 演示口径']]
-      .map(([name, value]) => `<div class="hosted-row"><span>${name}</span><b>${value}</b></div>`).join('')}</div>`;
+  return `<details class="hosted-box"><summary class="hosted-title">平台托管能力 <span>5 项</span></summary>
+    ${[['统一模型网关','统一接入'],['鉴权与团队配额','按团队分配'],['限流与降级','排队与兜底'],['日志与调用追溯','默认开启'],['成本核算','按调用统计']]
+      .map(([name, value]) => `<div class="hosted-row"><span>${name}</span><b>${value}</b></div>`).join('')}<p class="field-help">能力展示均为模拟。</p></details>`;
 }
 
 function renderWorkspaceHead(id, agent) {
   const info = profileFor(id);
-  return `<section class="workspace-head"><div class="back-row"><button data-action="manage" class="back-link">← 返回 Agent 管理</button><span class="head-divider"></span><span>${escapeHtml(agent.team)}</span></div>
+  return `<section class="workspace-head"><div class="back-row"><button data-action="manage" class="back-link">← Agent 管理</button><span class="head-divider"></span><span>${escapeHtml(agent.team)}</span></div>
     <div class="workspace-title"><span class="agent-avatar large ${info.accent}">${info.icon}</span><div><div class="title-line"><h1>${escapeHtml(agent.name)}</h1>${getBadge(agentStatus(id, agent))}</div><p>${escapeHtml(agent.taskDescription ?? info.blurb)}</p></div></div>
-    <div class="meta-strip"><span>调用形态 <b>${info.type}</b></span><span>生产版本 <b>${agent.liveVersion ?? '未发布'}</b></span><span>当前草稿 <b>${agent.draftVersion}</b></span></div></section>
-    <nav class="workflow-tabs" aria-label="Agent 生命周期">${views.map(([view,label],i)=>`<button data-action="goView" data-view="${view}" class="workflow-tab ${state.view===view?'active':''}"><span class="tab-number">${i+1}</span>${label}</button>`).join('')}</nav>`;
+    <div class="meta-strip"><span>${info.type}</span><span>生产 <b>${agent.liveVersion ?? '未发布'}</b></span><span>草稿 <b>${agent.draftVersion}</b></span></div></section>
+    <nav class="workflow-tabs" aria-label="Agent 生命周期">${views.map(([view,label],i)=>`<button data-action="goView" data-view="${view}" ${state.view===view?'aria-current="step"':''} class="workflow-tab ${state.view===view?'active':''}"><span class="tab-number">${String(i+1).padStart(2,'0')}</span><span>${label}</span>${i<5?icon('arrow','step-arrow'):''}</button>`).join('')}</nav>`;
 }
 
 function renderCreation(id, agent) {
@@ -215,13 +232,14 @@ function renderCreation(id, agent) {
 function renderConfig(id, agent) {
   const type = typeFor(id);
   const special = type === 'a'
-    ? `<div class="special-title"><span class="mini-icon coral">✳</span><div><h3>社区笔记检索</h3><p>示例中使用固定演示笔记 ID。</p></div></div><div class="info-row"><span>连接状态</span><b class="green-text">演示索引</b></div><div class="info-row"><span>输出要求</span><b>穿搭建议 + 笔记卡片</b></div><div class="strategy-box"><strong>推荐策略</strong><p>切换策略将改变模拟回答、离线评分和延迟。</p><div class="strategy-options"><button class="strategy-option ${agent.strategy==='speed'?'selected':''}" data-action="setStrategy" data-strategy="speed">优先响应速度<small>p95 0.9 秒 · 场景 10/12</small></button><button class="strategy-option ${agent.strategy==='relevance'?'selected':''}" data-action="setStrategy" data-strategy="relevance">优先场景相关性<small>p95 1.2 秒 · 场景 11/12</small></button></div></div>`
+    ? `<div class="special-title"><span class="mini-icon coral">${icon("outfit")}</span><div><h3>社区笔记检索</h3><p>示例中使用固定演示笔记 ID。</p></div></div><div class="info-row"><span>连接状态</span><b class="green-text">演示索引</b></div><div class="info-row"><span>输出要求</span><b>穿搭建议 + 笔记卡片</b></div><div class="strategy-box"><strong>推荐策略</strong><p>切换策略将改变模拟回答、离线评分和延迟。</p><div class="strategy-options"><button class="strategy-option ${agent.strategy==='speed'?'selected':''}" data-action="setStrategy" data-strategy="speed" aria-pressed="${agent.strategy==='speed'}">优先响应速度<small>p95 0.9 秒 · 场景 10/12</small></button><button class="strategy-option ${agent.strategy==='relevance'?'selected':''}" data-action="setStrategy" data-strategy="relevance" aria-pressed="${agent.strategy==='relevance'}">优先场景相关性<small>p95 1.2 秒 · 场景 11/12</small></button></div></div>`
     : type === 'b'
-      ? `<div class="special-title"><span class="mini-icon blue">◇</span><div><h3>政策规则</h3><p>结构化输出类别、理由和规则版本，供人工复核。</p></div></div><div class="info-row"><span>政策版本</span><b>${agent.policyVersion}</b></div><div class="rule-box ${agent.ruleEnabled?'enabled':''}"><div><strong>攻击性语言演示规则</strong><small>${agent.ruleEnabled?'已启用，重新评估可验证严重样本':'当前未启用，将导致 1 条严重样本漏判'}</small></div><button class="btn ${agent.ruleEnabled?'btn-light':'btn-primary'}" data-action="enableRule" ${agent.ruleEnabled?'disabled':''}>${agent.ruleEnabled?'已启用':'启用规则'}</button></div>`
-      : `<div class="special-title"><span class="mini-icon green">▣</span><div><h3>售后知识</h3><p>知识更新会形成新快照，并使旧评估失效。</p></div></div><div class="info-row"><span>当前知识版本</span><b>${agent.knowledgeVersion}</b></div><div class="knowledge-box"><strong>《店铺换货规则》</strong><p>${agent.knowledgeVersion==='K-02'?'演示条款：符合签收时间及商品状态条件时，可在订单页申请换码。':'当前版本缺少具体换码条件，无法给出有依据的答复。'}</p></div><button class="btn ${agent.knowledgeVersion==='K-02'?'btn-light':'btn-primary'}" data-action="updateKnowledge" ${agent.knowledgeVersion==='K-02'?'disabled':''}>${agent.knowledgeVersion==='K-02'?'已更新至 K-02':'导入新版知识 K-02'}</button>`;
-  return `<div class="content-grid"><section class="panel"><div class="panel-heading"><div><h2>配置草稿 ${agent.draftVersion}</h2><p>配置变更后需重新评估。</p></div><span class="outline-badge">草稿</span></div>
-    <form id="prompt-form"><label class="field-label" for="prompt">Agent 指令</label><textarea id="prompt" name="prompt" rows="6">${escapeHtml(agent.prompt)}</textarea><div class="field-help">生产版本不会因编辑草稿而变化。</div><div class="form-footer"><button type="submit" class="btn btn-outline">保存草稿</button><button type="submit" name="next" value="debug" class="btn btn-primary">保存并调试 →</button></div></form></section>
-    <aside class="panel side-panel"><h2>场景能力</h2>${special}<div class="side-note">${type==='b'?'最终违规判定由人工完成。':type==='c'?'缺少有效知识时必须转人工。':'业务效果需在灰度后由曝光与点击事件衡量。'}</div>${renderHostedCapabilities()}</aside></div>`;
+      ? `<div class="special-title"><span class="mini-icon blue">${icon("shield")}</span><div><h3>政策规则</h3><p>结构化输出类别、理由和规则版本，供人工复核。</p></div></div><div class="info-row"><span>政策版本</span><b>${agent.policyVersion}</b></div><div class="rule-box ${agent.ruleEnabled?'enabled':''}"><div><strong>攻击性语言演示规则</strong><small>${agent.ruleEnabled?'已启用，重新评估可验证严重样本':'当前未启用，将导致 1 条严重样本漏判'}</small></div><button class="btn ${agent.ruleEnabled?'btn-light':'btn-primary'}" data-action="enableRule" ${agent.ruleEnabled?'disabled':''}>${agent.ruleEnabled?'已启用':'启用规则'}</button></div>`
+      : `<div class="special-title"><span class="mini-icon green">${icon("chat")}</span><div><h3>售后知识</h3><p>知识更新会形成新快照，并使旧评估失效。</p></div></div><div class="info-row"><span>当前知识版本</span><b>${agent.knowledgeVersion}</b></div><div class="knowledge-box"><strong>《店铺换货规则》</strong><p>${agent.knowledgeVersion==='K-02'?'演示条款：符合签收时间及商品状态条件时，可在订单页申请换码。':'当前版本缺少具体换码条件，无法给出有依据的答复。'}</p></div><button class="btn ${agent.knowledgeVersion==='K-02'?'btn-light':'btn-primary'}" data-action="updateKnowledge" ${agent.knowledgeVersion==='K-02'?'disabled':''}>${agent.knowledgeVersion==='K-02'?'已更新至 K-02':'导入新版知识 K-02'}</button>`;
+  return `<div class="content-grid config-layout"><section class="panel"><div class="panel-heading"><div><h2>配置草稿</h2><p>设定指令与场景能力，保存后进入调试。</p></div><span class="outline-badge">${agent.draftVersion}</span></div>
+    <form id="prompt-form"><label class="field-label" for="prompt">Agent 指令</label><textarea id="prompt" name="prompt" rows="4">${escapeHtml(agent.prompt)}</textarea></form>
+    <div class="config-capability">${special}</div><div class="form-footer"><button form="prompt-form" type="submit" class="btn btn-outline">保存草稿</button><button form="prompt-form" type="submit" name="next" value="debug" class="btn btn-primary">保存并调试 ${icon('arrow')}</button></div></section>
+    <aside class="panel side-panel"><h2>配置说明</h2><div class="info-row"><span>输出格式</span><b>${escapeHtml(TEMPLATES[type].outputFormat)}</b></div><div class="info-row"><span>生产版本</span><b>${agent.liveVersion ?? '未发布'}</b></div><div class="side-note">${type==='b'?'最终违规判定由人工完成。':type==='c'?'缺少有效知识时转人工。':'效果指标在灰度发布后观察。'}<br />修改配置后需重新评估。</div>${renderHostedCapabilities()}</aside></div>`;
 }
 
 function renderDebug(id, agent) {
@@ -235,14 +253,14 @@ function renderDebug(id, agent) {
   const metaStrip = agent.debugHistory?.length
     ? `<div class="run-meta"><span>本次模拟运行</span><b>${meta.latency} ms</b><b>${meta.promptTokens + meta.outputTokens} tokens</b><b>¥${meta.cost.toFixed(4)}</b><b>${escapeHtml(meta.route)}</b></div>`
     : '';
-  const batch = type === 'b' ? `<aside class="panel side-panel"><h2>批量跑批</h2><p class="aside-intro">B 是批量任务形态：平台按样本集整批试跑，而不是一条条对话。以下为演示结果。</p>
+  const batch = type === 'b' ? `<aside class="panel side-panel"><h2>批量跑批</h2><p class="aside-intro">固定样本集的预设批量结果（模拟）。</p>
     <div class="info-row"><span>样本集</span><b>POLICY-2026.09 · 20 条</b></div><div class="info-row"><span>已完成</span><b>20 / 20</b></div><div class="info-row"><span>命中违规</span><b>${agent.ruleEnabled ? '4 条' : '3 条'}</b></div><div class="info-row"><span>严重样本漏判</span><b class="${agent.ruleEnabled ? 'green-text' : 'red-text'}">${agent.ruleEnabled ? '0 条' : '1 条'}</b></div><div class="info-row"><span>结构化输出率</span><b>100%</b></div>
     <div class="side-note">${agent.ruleEnabled ? '跑批结果可直接进入评估复核。' : '存在严重漏判，评估会阻断发布。'}</div></aside>` : '';
   return `<div class="${type === 'b' ? 'content-grid' : 'debug-layout'}"><section class="panel debug-panel"><div class="panel-heading"><div><h2>调试会话</h2><p>${type === 'b' ? '单条试跑用于定位问题，另附整批跑批结果。' : type === 'c' ? '多轮会话：先补齐信息，再给出有引用的答复。' : '实时请求形态：单条输入即时返回。'}</p></div><button class="small-link" data-action="resetDebug">清空会话</button></div>
-    <div class="debug-prompt"><div class="debug-prompt-heading"><label class="field-label" for="debug-system-prompt">系统提示词</label><select id="debug-preset">${presets.map(item=>`<option value="${item.value}" ${selectedPreset===item.value?'selected':''}>${escapeHtml(item.label)}</option>`).join('')}</select></div><textarea id="debug-system-prompt" rows="2">${escapeHtml(systemPrompt)}</textarea></div>
-    <div class="chat-area">${agent.debugHistory?.length?agent.debugHistory.map((output,index)=>`<div class="chat-bubble user"><span>${type==='c'&&index===1?'用户补充':'业务输入'}</span><p>${escapeHtml(agent.debugInputs?.[index] ?? agent.sampleInput)}</p></div><div class="chat-bubble assistant"><span>模拟回答</span><p>${multiline(output)}</p></div>`).join(''):`<div class="chat-empty"><div>✦</div><strong>等待运行样本</strong><span>输入内容后运行，查看模拟回答。</span></div>`}</div>
+    <div class="debug-prompt"><div class="debug-prompt-heading"><label class="field-label" for="debug-system-prompt">系统提示词</label><select id="debug-preset" aria-label="系统提示词预设">${presets.map(item=>`<option value="${item.value}" ${selectedPreset===item.value?'selected':''}>${escapeHtml(item.label)}</option>`).join('')}</select></div><textarea id="debug-system-prompt" rows="2">${escapeHtml(systemPrompt)}</textarea></div>
+    <div class="chat-area">${agent.debugHistory?.length?agent.debugHistory.map((output,index)=>`<div class="chat-bubble user"><span>${type==='c'&&index===1?'用户补充':'业务输入'}</span><p>${escapeHtml(agent.debugInputs?.[index] ?? agent.sampleInput)}</p></div><div class="chat-bubble assistant"><span>模拟回答</span><p>${multiline(output)}</p></div>`).join(''):`<div class="chat-empty"><div>${icon("chat")}</div><strong>等待运行样本</strong><span>输入内容后运行，查看模拟回答。</span></div>`}</div>
     ${metaStrip}
-    <div class="debug-composer"><input id="debug-input" class="sample-input" type="text" value="${escapeHtml(nextInput)}" placeholder="输入本轮用户问题" aria-label="本轮用户问题" /><button class="btn btn-outline" data-action="runDebug">${type==='c'&&agent.debugStep===1?'继续对话':'运行模拟'}</button><button class="btn btn-primary" data-action="goView" data-view="evaluation">进入评估 →</button></div><p class="debug-hint">回答为确定性模拟；本轮提示词仅用于调试，不会写回配置草稿。</p></section>${batch}</div>`;
+    <div class="debug-composer"><input id="debug-input" class="sample-input" type="text" value="${escapeHtml(nextInput)}" placeholder="输入本轮用户问题" aria-label="本轮用户问题" /><button class="btn btn-outline" data-action="runDebug">${type==='c'&&agent.debugStep===1?'继续对话':'运行模拟'}</button><button class="btn btn-primary" data-action="goView" data-view="evaluation">进入评估 →</button></div><p class="debug-hint">模拟回答 · 提示词仅在本次调试中生效。</p></section>${batch}</div>`;
 }
 
 function renderEvaluation(id, agent) {
@@ -259,7 +277,7 @@ function renderEvaluation(id, agent) {
   const compare = ran && baseline
     ? `<div class="compare-strip ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}"><span>与上一次评估对比</span><b>${escapeHtml(baseline.runId)} ${escapeHtml(baseline.score)}</b><i>→</i><b>${escapeHtml(latest.runId)} ${escapeHtml(latest.score)}</b><em>${delta === null ? '' : delta > 0 ? `通过样本 ${signed(delta)} 条` : delta < 0 ? `通过样本 ${signed(delta)} 条` : '通过样本数持平'}</em></div>`
     : ran ? '<div class="compare-strip"><span>与上一次评估对比</span><em>这是该 Agent 的首次评估，暂无基线。</em></div>' : '';
-  return `<div class="evaluation-layout"><section class="panel"><div class="panel-heading"><div><h2>离线样本评估</h2><p>配置变更后需重新评估。</p></div><div class="heading-actions"><button class="btn btn-outline" data-action="evaluate">${log.length?'重新评估':'运行评估'}</button><button class="btn btn-primary" data-action="goView" data-view="release">进入发布 →</button></div></div>
+  return `<div class="evaluation-layout"><section class="panel"><div class="panel-heading"><div><h2>离线样本评估</h2><p>配置变更后需重新评估。</p></div><div class="heading-actions"><button class="btn ${agent.evaluation==='passed'?'btn-outline':'btn-primary'}" data-action="evaluate">${log.length?'重新评估':'运行评估'}</button>${agent.evaluation==='failed'||stale?'<button class="btn btn-outline" data-action="goView" data-view="config">返回配置修复 →</button>':`<button class="btn ${agent.evaluation==='passed'?'btn-primary':'btn-outline'}" data-action="goView" data-view="release" ${agent.evaluation!=='passed'?'disabled':''}>进入发布 →</button>`}</div></div>
     <div class="eval-summary ${tone}"><span class="eval-symbol">${icon}</span><div><strong>${stale?'旧评估已失效':!ran?'等待评估':agent.evaluation==='passed'?'评估通过':'发布被阻断'}</strong><p>${stale?'配置已变化，必须对当前草稿重新评估。':!ran?'运行当前草稿，查看场景专属质量门槛。':result.detail}</p></div><span class="eval-score">${ran?result.score:'—'}</span></div>
     ${compare}
     <div class="table-head"><h3>${result.title}</h3><span>样本集 ${result.sampleSetVersion} · 演示数据</span></div><div class="check-list">${(ran?result.checks:[['固定样本集','待运行','点击“运行评估”查看结果']]).map(([name,status,detail])=>`<div class="check-row"><div><strong>${name}</strong><span>${detail}</span></div><span class="check-status ${status==='通过'?'pass':status==='未通过'?'fail':''}">${status}</span></div>`).join('')}</div>
@@ -298,12 +316,12 @@ function renderRelease(id, agent) {
     `对应评估：${evidenceEval}`,
   ];
   const disposal = type==='a'
-    ? `<p class="aside-intro">${canAdjustTraffic?'拖动滑块调整新版本流量；0% 时全部由稳定版本承接，100% 为全量。':'评估并发布当前草稿后，可调整新版本流量。'}</p><label class="traffic-value" for="traffic-slider"><span>新版本流量</span><output id="traffic-value">${agent.traffic}%</output></label><input id="traffic-slider" class="traffic-slider" type="range" min="0" max="100" step="1" value="${agent.traffic}" style="--range-progress:${agent.traffic}%" ${!canAdjustTraffic?'disabled':''} aria-label="新版本灰度比例" /><div class="traffic-scale"><span>0% 稳定版本</span><span>100% 全量</span></div><button class="btn btn-danger-outline full" data-action="rollback" ${!agent.previousVersion?'disabled':''}>${agent.previousVersion?`回退到 ${agent.previousVersion}`:'暂无可回退版本'}</button>`
+    ? `<p class="aside-intro">${canAdjustTraffic?'拖动滑块调整新版本流量；0% 时全部由稳定版本承接，100% 为全量。':'评估并发布当前草稿后，可调整新版本流量。'}</p><label class="traffic-value" for="traffic-slider"><span>新版本流量</span><output id="traffic-value">${agent.traffic}%</output></label><div class="traffic-number-wrap"><label for="traffic-number">精确设置</label><input id="traffic-number" type="number" min="0" max="100" step="1" value="${agent.traffic}" ${!canAdjustTraffic?'disabled':''} /><span>%</span><button class="btn btn-outline" data-action="applyTraffic" aria-label="应用灰度比例" ${!canAdjustTraffic?'disabled':''}>应用</button></div><input id="traffic-slider" class="traffic-slider" type="range" min="0" max="100" step="1" value="${agent.traffic}" style="--range-progress:${agent.traffic}%" ${!canAdjustTraffic?'disabled':''} aria-label="新版本灰度比例" /><div class="traffic-scale"><span>0% 稳定版本</span><span>100% 全量</span></div><button class="btn btn-danger-outline full" data-action="rollback" ${!agent.previousVersion?'disabled':''}>${agent.previousVersion?`回退到 ${agent.previousVersion}`:'暂无可回退版本'}</button>`
     : `<p class="aside-intro">政策或知识可能过期，异常时暂停建议并转人工；问题修复后可恢复接管。</p>${agent.status==='人工兜底'
         ? `<div class="paused-note">当前处于人工兜底状态，Agent 建议已停止下发。</div><button class="btn btn-primary full" data-action="resume">恢复 Agent 接管</button>`
         : `<button class="btn btn-danger-outline full" data-action="pause" ${!agent.liveVersion?'disabled':''}>暂停建议 · 转人工</button>`}`;
   return `<div class="content-grid release-grid"><section class="panel"><div class="panel-heading"><div><h2>版本发布</h2><p>核对配置、评估和审批证据。</p></div>${getBadge(agentStatus(id,agent))}</div>
-    <div class="version-track"><div><span>当前生产</span><strong>${agent.liveVersion ?? '未发布'}</strong><small>${type==='a'?(agent.traffic===100?'新版本全量 100%':agent.traffic?`新版本流量 ${agent.traffic}%`:agent.previousVersion?'稳定版 100% · 新版 0%':agent.liveVersion?'当前稳定运行 · 新版待发布':'待首次发布'):agent.status==='人工兜底'?'已暂停 · 人工兜底':'稳定运行'}</small></div><span class="track-arrow">→</span><div><span>待发布草稿</span><strong>${agent.draftVersion}</strong><small>${type==='c'?`知识 ${agent.knowledgeVersion}`:type==='b'?`政策 ${agent.policyVersion}`:`策略 ${agent.strategy==='relevance'?'场景相关性':'响应速度'}`}</small></div></div>
+    <div class="version-track"><div><span>当前生产</span><strong>${agent.liveVersion ?? '未发布'}</strong><small>${type==='a'?(agent.traffic===100?'新版本全量 100%':agent.traffic?`新版本流量 ${agent.traffic}%`:agent.previousVersion?'稳定版 100% · 新版 0%':agent.liveVersion?'当前稳定运行 · 新版待发布':'待首次发布'):!agent.liveVersion?'待首次发布':agent.status==='人工兜底'?'已暂停 · 人工兜底':'稳定运行'}</small></div><span class="track-arrow">→</span><div><span>待发布草稿</span><strong>${agent.draftVersion}</strong><small>${type==='c'?`知识 ${agent.knowledgeVersion}`:type==='b'?`政策 ${agent.policyVersion}`:`策略 ${agent.strategy==='relevance'?'场景相关性':'响应速度'}`}</small></div></div>
     ${rolled?`<div class="rollback-warn"><strong>${escapeHtml(agent.draftVersion)} 曾于 ${formatTime(rolled.at)} 被回退</strong><span>该版本的评估已失效。重新发布前必须重新评估，确认问题已修复。</span></div>`:''}
     <div class="release-evidence"><h3>${published?'当前版本证据':'本次变化与决策证据'}</h3>${changes.map(item=>`<div class="evidence-row">• ${escapeHtml(item)}</div>`).join('')}${type==='b'?`<div class="evidence-row">审批人：${agent.approved?`${escapeHtml(agent.approvalPerson)} · 已审批（${formatTime(agent.approvedAt)}）`:'社区生态政策负责人（模拟） · 待审批'}</div>`:''}</div>
     <div class="release-checks"><div><span class="mini-check ${agent.evaluation==='passed'?'ok':''}">${agent.evaluation==='passed'?'✓':'!'}</span><div><strong>评估结果</strong><small>${evaluationText}</small></div></div>${type==='b'?`<div><span class="mini-check ${agent.approved?'ok':''}">${agent.approved?'✓':'!'}</span><div><strong>政策负责人审批</strong><small>${agent.approved?'已完成':'待完成'}</small></div></div>`:''}<div><span class="mini-check ok">✓</span><div><strong>发布记录</strong><small>版本、操作和时间保留在本地</small></div></div></div>
@@ -318,7 +336,7 @@ function renderChart(series, withBaseline) {
   const bar = value => `${Math.max(6, Math.min(100, ((value - series.min) / span) * 100))}%`;
   return `<div class="chart-body"><div class="chart-axis"><span>${series.max}${series.unit}</span><span>${((series.max + series.min) / 2).toFixed(0)}${series.unit}</span><span>${series.min}${series.unit}</span></div>
     <div class="bar-chart">${series.current.map((value, i) => `<div class="bar-pair">${withBaseline?`<span class="bar old" style="height:${bar(series.baseline[i])}" title="${series.baselineName} ${series.baseline[i]}${series.unit}"></span>`:''}<span class="bar new" style="height:${bar(value)}" title="${series.currentName} ${value}${series.unit}"></span><small>${i+1}日</small></div>`).join('')}</div></div>
-    <div class="chart-foot">纵轴 ${series.label}（${series.min}–${series.max}${series.unit}）· 模拟数据</div>`;
+    <div class="chart-foot">${series.label}（${series.unit}）· 模拟数据</div><details class="chart-data"><summary>查看数据明细</summary><table><caption>${series.label} · 近 7 天模拟结果</caption><thead><tr><th scope="col">日期</th><th scope="col">${escapeHtml(series.currentName)}</th>${withBaseline?`<th scope="col">${escapeHtml(series.baselineName)}</th>`:''}</tr></thead><tbody>${series.current.map((value,i)=>`<tr><th scope="row">${i+1}日</th><td>${value}${series.unit}</td>${withBaseline?`<td>${series.baseline[i]}${series.unit}</td>`:''}</tr>`).join('')}</tbody></table></details>`;
 }
 
 function renderExperiment(agent) {
@@ -345,7 +363,7 @@ function renderTrace(id, agent) {
     : type === 'b'
       ? [['B-0042', '评论判定', `政策 ${agent.liveConfig?.policyVersion ?? agent.policyVersion} · 人工复核`, `攻击性语言规则：${agent.liveRuleEnabled?'已启用':'未启用'}`]]
       : [['C-0198', '换码咨询', `知识 ${agent.liveKnowledgeVersion} · ${agent.liveKnowledgeVersion==='K-02'?'有引用':'转人工'}`, `售后知识版本：${agent.liveKnowledgeVersion ?? '—'}`]];
-  return rows.map(([code, title, detail, resource]) => `<details class="trace-row"><summary><span class="trace-icon">⌁</span><div><strong>${title}</strong><small>${code} · ${agent.liveVersion}</small><p>${escapeHtml(detail)}</p></div><span class="trace-arrow">▾</span></summary>
+  return rows.map(([code, title, detail, resource]) => `<details class="trace-row"><summary><span class="trace-icon">${icon("activity")}</span><div><strong>${title}</strong><small>${code} · ${agent.liveVersion}</small><p>${escapeHtml(detail)}</p></div><span class="trace-arrow">▾</span></summary>
     <div class="trace-detail">
       <div class="info-row"><span>命中版本</span><b>${agent.liveVersion}</b></div>
       <div class="info-row"><span>当时指令</span><b>${escapeHtml(truncate(agent.liveConfig?.prompt ?? agent.prompt, 40))}</b></div>
@@ -386,6 +404,7 @@ function renderMonitor(id, agent) {
 }
 
 function render() {
+  const noticeTone = /未通过|被阻断|请先|不能为空/.test(state.notice) ? 'danger' : /失效|回退|暂停|人工/.test(state.notice) ? 'warn' : 'good';
   let content;
   if (state.view === 'overview') content = renderOverview();
   else if (state.view === 'manage') content = renderManage();
@@ -398,7 +417,24 @@ function render() {
     const page = { creation: renderCreation, config: renderConfig, debug: renderDebug, evaluation: renderEvaluation, release: renderRelease, monitor: renderMonitor }[state.view] ?? renderCreation;
     content = renderWorkspaceHead(id, agent) + page(id, agent);
   } else content = renderManage();
-  app.innerHTML = `${renderSidebar()}<div class="main-shell">${renderTopbar()}<main class="main-content">${state.notice?`<div class="notice" role="status"><span>●</span>${escapeHtml(state.notice)}<button aria-label="关闭提示" data-action="clearNotice">×</button></div>`:''}${content}</main></div>`;
+  app.innerHTML = `${renderSidebar()}<div class="main-shell">${renderTopbar()}<main id="main-content" class="main-content" tabindex="-1">${state.notice?`<div class="notice ${noticeTone}" role="status">${icon(noticeTone==='good'?'check':'alert')}${escapeHtml(state.notice)}<button aria-label="关闭提示" data-action="clearNotice">×</button></div>`:''}${content}</main></div>`;
+}
+
+function requestConfirmation(title, description, label, action) {
+  const returnFocus = document.activeElement;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'confirm-dialog';
+  dialog.setAttribute('aria-labelledby', 'confirm-title');
+  dialog.setAttribute('aria-describedby', 'confirm-description');
+  dialog.innerHTML = `<span class="confirm-icon">${icon('alert')}</span><h2 id="confirm-title">${escapeHtml(title)}</h2><p id="confirm-description">${escapeHtml(description)}</p><form method="dialog" class="confirm-actions"><button class="btn btn-outline" value="cancel" autofocus>取消</button><button class="btn btn-primary" value="confirm">${escapeHtml(label)}</button></form>`;
+  dialog.addEventListener('close', () => {
+    const confirmed = dialog.returnValue === 'confirm';
+    dialog.remove();
+    if (confirmed) update(action);
+    else returnFocus?.focus({ preventScroll: true });
+  }, { once: true });
+  app.append(dialog);
+  dialog.showModal();
 }
 
 app.addEventListener('click', event => {
@@ -420,11 +456,16 @@ app.addEventListener('click', event => {
   else if (action === 'goView') update({ type: 'navigate', view: state.selectedAgent ? button.dataset.view : 'manage' });
   else if (action === 'clearNotice') { state.notice = ''; render(); }
   else if (action === 'reset') {
-    if (window.confirm('重置演示将删除所有自建 Agent 和演示进度，恢复到三个初始示例。确定继续？')) update({ type: 'reset' });
+    requestConfirmation('重置演示？', '所有自建 Agent 和演示进度将被清除，恢复到三个初始示例。', '确认重置', { type: 'reset' });
   }
   else if (action === 'deleteAgent') {
     const name = state.agents[agentId]?.name ?? '该 Agent';
-    if (window.confirm(`确定删除「${name}」？其配置、评估和发布记录将一并移除。`)) update({ type: 'deleteAgent', agentId });
+    requestConfirmation('删除此 Agent？', `「${name}」的配置、评估和发布记录将一并移除。`, '确认删除', { type: 'deleteAgent', agentId });
+  }
+  else if (action === 'applyTraffic') {
+    const input = app.querySelector('#traffic-number');
+    if (!input.value.trim() || !input.validity.valid) { input.reportValidity(); return; }
+    update({ type: 'setTraffic', agentId, traffic: Number(input.value) });
   }
   else if (action === 'setStrategy') update({ type: action, agentId, strategy: button.dataset.strategy });
   else if (action === 'runDebug') update({ type: action, agentId,
@@ -435,7 +476,14 @@ app.addEventListener('click', event => {
 });
 
 app.addEventListener('input', event => {
-  if (event.target.id === 'traffic-slider') {
+  if (event.target.id === 'agent-search') {
+    const query = event.target.value.trim().toLowerCase();
+    const rows = [...app.querySelectorAll('.agent-table-row')];
+    rows.forEach(row => { row.hidden = !row.dataset.search.includes(query); });
+    app.querySelector('.search-empty').hidden = rows.some(row => !row.hidden);
+  } else if (event.target.id === 'traffic-slider') {
+    const number = app.querySelector('#traffic-number');
+    if (number) number.value = event.target.value;
     const output = app.querySelector('#traffic-value');
     if (output) output.textContent = `${event.target.value}%`;
     event.target.style.setProperty('--range-progress', `${event.target.value}%`);
@@ -447,6 +495,7 @@ app.addEventListener('input', event => {
 
 app.addEventListener('change', event => {
   if (event.target.id === 'traffic-slider') {
+    if (!event.target.value.trim() || !event.target.validity.valid) { event.target.reportValidity(); return; }
     update({ type: 'setTraffic', agentId: state.selectedAgent, traffic: Number(event.target.value) });
   } else if (event.target.id === 'debug-preset') {
     const agent = state.agents[state.selectedAgent];
@@ -454,6 +503,17 @@ app.addEventListener('change', event => {
     const prompt = debugPromptPresets(typeFor(state.selectedAgent), agent).find(item => item.value === event.target.value)?.prompt;
     const editor = app.querySelector('#debug-system-prompt');
     if (prompt && editor) editor.value = prompt;
+  }
+});
+
+app.addEventListener('keydown', event => {
+  if (event.target.id === 'traffic-number' && event.key === 'Enter') {
+    event.preventDefault();
+    app.querySelector('[data-action="applyTraffic"]')?.click();
+  }
+  if (event.target.id === 'debug-input' && event.key === 'Enter' && !event.isComposing) {
+    event.preventDefault();
+    app.querySelector('[data-action="runDebug"]')?.click();
   }
 });
 
