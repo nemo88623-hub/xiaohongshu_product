@@ -97,20 +97,20 @@ function draftHint(agent) {
 function renderSidebar() {
   const managing = !['overview', 'platform'].includes(state.view);
   return `<a class="skip-link" href="#main-content">跳到主内容</a><aside class="sidebar">
-    <div class="brand"><div class="brand-mark">${icon('studio')}</div><div><strong>Agent Studio</strong><small>企业 Agent 基建平台</small></div></div>
-    <div class="space-label">工作空间 <span class="workspace-chip">个人演示</span></div>
+    <div class="brand"><div class="brand-mark"><img src="./assets/xiaohongshu-logo.png" alt="小红书" /></div><div><strong>红薯 Agent Studio</strong></div></div>
+    <div class="space-label">工作空间</div>
     <nav aria-label="主导航">
       <button class="side-link ${state.view === 'overview' ? 'active' : ''}" ${state.view === 'overview' ? 'aria-current="page"' : ''} data-action="overview">${icon('grid')}<span>工作台</span></button>
       <button class="side-link ${managing ? 'active' : ''}" ${managing ? 'aria-current="page"' : ''} data-action="manage">${icon('layers')}<span>Agent 管理</span><span class="nav-count">${Object.keys(state.agents).length}</span></button>
       <button class="side-link ${state.view === 'platform' ? 'active' : ''}" ${state.view === 'platform' ? 'aria-current="page"' : ''} data-action="platform">${icon('map')}<span>平台能力地图</span></button>
     </nav>
-    <div class="sidebar-bottom"><div class="local-info"><span class="demo-pulse"></span><div><strong>演示工作空间</strong><small>模拟数据 · 进度保存于本地</small></div></div><button class="reset-link" data-action="reset">${icon('reset')}重置演示</button></div>
+    <div class="sidebar-bottom"><button class="reset-link" data-action="reset">${icon('reset')}重置演示</button></div>
   </aside>`;
 }
 
 function renderTopbar() {
   const title = state.view === 'overview' ? '工作台' : state.view === 'manage' ? 'Agent 管理' : state.view === 'platform' ? '平台能力地图' : ['templates','create'].includes(state.view) ? '新建 Agent' : state.agents[state.selectedAgent]?.name ?? 'Agent 管理';
-  return `<header class="topbar"><div class="breadcrumb"><button class="crumb-home" data-action="overview">工作空间</button><b>/</b><span>${escapeHtml(title)}</span></div><div class="top-actions"><span class="demo-pill"><span class="badge-dot"></span>演示数据</span><button class="mobile-reset" data-action="reset" aria-label="重置演示">重置</button><span class="avatar" aria-label="演示用户 PM">PM</span></div></header>`;
+  return `<header class="topbar"><div class="breadcrumb"><span>${escapeHtml(title)}</span></div><div class="top-actions"><button class="mobile-reset" data-action="reset" aria-label="重置演示">重置</button><div class="profile-menu-wrap"><button class="avatar" data-action="toggleUserMenu" aria-label="打开用户信息" aria-expanded="false">HZ</button><div id="profile-menu" class="profile-menu" hidden><h3>用户信息</h3><div class="profile-row"><span>姓名</span><b>洪子琪</b></div><div class="profile-row"><span>部门</span><b>企业产品中心 · Agent 平台</b></div><div class="profile-row"><span>工号</span><b>XHS-1024</b></div><div class="profile-row"><span>工位</span><b>A3-18</b></div><div class="profile-row"><span>园区</span><b>上海 · 长宁园区</b></div></div></div></div></header>`;
 }
 
 function renderAgentCard(id, agent) {
@@ -449,7 +449,13 @@ app.addEventListener('click', event => {
   if (!button || button.disabled) return;
   const action = button.dataset.action;
   const agentId = button.dataset.agent ?? state.selectedAgent;
-  if (action === 'overview') update({ type: 'navigate', view: 'overview' });
+  if (action === 'toggleUserMenu') {
+    const menu = app.querySelector('#profile-menu');
+    const expanded = button.getAttribute('aria-expanded') !== 'true';
+    if (menu) menu.hidden = !expanded;
+    button.setAttribute('aria-expanded', String(expanded));
+  }
+  else if (action === 'overview') update({ type: 'navigate', view: 'overview' });
   else if (action === 'manage') update({ type: 'navigate', view: 'manage' });
   else if (action === 'platform') update({ type: 'navigate', view: 'platform' });
   else if (action === 'newAgent') update({ type: 'navigate', view: 'templates' });
