@@ -17,6 +17,18 @@ export const TEMPLATES = {
   c: { taskDescription: '根据售后知识辅助客服多轮答疑，缺少依据时转人工。', callMode: '多轮会话', outputFormat: '客服建议 + 知识引用', defaultResource: '售后知识 K-01' },
 };
 
+const WORKFLOW_VIEW_IDS = ['creation', 'config', 'debug', 'evaluation', 'release', 'monitor'];
+
+export function getWorkflowProgress(view) {
+  const found = WORKFLOW_VIEW_IDS.indexOf(view);
+  const index = found < 0 ? 0 : found;
+  return {
+    index,
+    completedCount: index + 1,
+    percent: Math.round((index / (WORKFLOW_VIEW_IDS.length - 1)) * 100),
+  };
+}
+
 export function templateTypeOf(agentId, agent) {
   return agent?.templateType ?? (TEMPLATES[agentId] ? agentId : null);
 }

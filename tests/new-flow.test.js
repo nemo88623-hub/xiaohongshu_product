@@ -180,3 +180,15 @@ test('paused B monitor no longer reports active online operation', () => {
   state = transition(state, { type: 'pause', agentId: 'b' });
   assert.equal(logic.getMonitorMode('b', state.agents.b), 'paused');
 });
+
+test('workflow progress maps all six reversible stages onto one track', () => {
+  assert.deepEqual(logic.getWorkflowProgress('creation'), {
+    index: 0, completedCount: 1, percent: 0,
+  });
+  assert.deepEqual(logic.getWorkflowProgress('evaluation'), {
+    index: 3, completedCount: 4, percent: 60,
+  });
+  assert.deepEqual(logic.getWorkflowProgress('monitor'), {
+    index: 5, completedCount: 6, percent: 100,
+  });
+});

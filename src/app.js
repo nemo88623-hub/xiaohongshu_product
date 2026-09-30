@@ -1,5 +1,5 @@
 import { icon } from './icons.js';
-import { createInitialState, transition, getEvaluation, getEvaluationBaseline, canPublish, restoreState, TEMPLATES, templateTypeOf, getMonitorMode, getExperimentReadout, getMonitorSeries, getRunMeta, SKELETON, MODULES } from './logic.js';
+import { createInitialState, transition, getEvaluation, getEvaluationBaseline, canPublish, restoreState, TEMPLATES, templateTypeOf, getMonitorMode, getExperimentReadout, getMonitorSeries, getRunMeta, getWorkflowProgress, SKELETON, MODULES } from './logic.js';
 
 const STORAGE_KEY = 'agent-studio-demo-v6';
 const app = document.querySelector('#app');
@@ -214,10 +214,11 @@ function renderHostedCapabilities() {
 
 function renderWorkspaceHead(id, agent) {
   const info = profileFor(id);
+  const progress = getWorkflowProgress(state.view);
   return `<section class="workspace-head"><div class="back-row"><button data-action="manage" class="back-link">← Agent 管理</button><span class="head-divider"></span><span>${escapeHtml(agent.team)}</span></div>
     <div class="workspace-title"><span class="agent-avatar large ${info.accent}">${info.icon}</span><div><div class="title-line"><h1>${escapeHtml(agent.name)}</h1>${getBadge(agentStatus(id, agent))}</div><p>${escapeHtml(agent.taskDescription ?? info.blurb)}</p></div></div>
     <div class="meta-strip"><span>${info.type}</span><span>生产 <b>${agent.liveVersion ?? '未发布'}</b></span><span>草稿 <b>${agent.draftVersion}</b></span></div></section>
-    <nav class="workflow-tabs" aria-label="Agent 生命周期">${views.map(([view,label],i)=>`<button data-action="goView" data-view="${view}" ${state.view===view?'aria-current="step"':''} class="workflow-tab ${state.view===view?'active':''}"><span class="tab-number">${String(i+1).padStart(2,'0')}</span><span>${label}</span>${i<5?icon('arrow','step-arrow'):''}</button>`).join('')}</nav>`;
+    <nav class="workflow-progress" aria-label="Agent 生命周期"><div class="workflow-scroll"><div class="workflow-tabs" style="--workflow-progress:${progress.percent / 100}">${views.map(([view,label],i)=>`<button data-action="goView" data-view="${view}" aria-label="${label}，第 ${i+1} 阶段，共 6 阶段" ${state.view===view?'aria-current="step"':''} class="workflow-tab ${i<progress.index?'completed':''} ${state.view===view?'active':''}"><span class="workflow-label">${label}</span><span class="workflow-node" aria-hidden="true"></span></button>`).join('')}</div></div></nav>`;
 }
 
 function renderCreation(id, agent) {
