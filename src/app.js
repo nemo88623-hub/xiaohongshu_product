@@ -303,6 +303,12 @@ function renderRelease(id, agent) {
   const ready = canPublish(id, agent);
   const published = agent.liveVersion === agent.draftVersion;
   const canAdjustTraffic = Boolean(agent.liveVersion && agent.status !== '已回退' && (agent.previousVersion || published));
+  const selectedTraffic = published ? agent.traffic : 10;
+  const trafficMin = published ? 0 : 1;
+  const canSelectTraffic = ready || canAdjustTraffic;
+  const trafficActionLabel = published
+    ? selectedTraffic === 0 ? '流量降至 0%' : selectedTraffic === 100 ? '全量至 100%' : `调整至 ${selectedTraffic}%`
+    : selectedTraffic === 100 ? '全量发布' : `发布至 ${selectedTraffic}% 灰度`;
   const evaluationText = agent.evaluation==='passed'?'通过':agent.evaluation==='failed'?'未通过':agent.evaluation==='stale'?'已失效，需重新评估':'未运行';
   const evidenceEval = agent.evaluation === 'passed' || agent.evaluation === 'failed'
     ? `${agent.evaluationRunId} · ${getEvaluation(id, agent).sampleSetVersion}`
@@ -316,7 +322,7 @@ function renderRelease(id, agent) {
     `对应评估：${evidenceEval}`,
   ];
   const disposal = type==='a'
-    ? `<p class="aside-intro">${canAdjustTraffic?'拖动滑块调整新版本流量；0% 时全部由稳定版本承接，100% 为全量。':'评估并发布当前草稿后，可调整新版本流量。'}</p><label class="traffic-value" for="traffic-slider"><span>新版本流量</span><output id="traffic-value">${agent.traffic}%</output></label><div class="traffic-number-wrap"><label for="traffic-number">精确设置</label><input id="traffic-number" type="number" min="0" max="100" step="1" value="${agent.traffic}" ${!canAdjustTraffic?'disabled':''} /><span>%</span><button class="btn btn-outline" data-action="applyTraffic" aria-label="应用灰度比例" ${!canAdjustTraffic?'disabled':''}>应用</button></div><input id="traffic-slider" class="traffic-slider" type="range" min="0" max="100" step="1" value="${agent.traffic}" style="--range-progress:${agent.traffic}%" ${!canAdjustTraffic?'disabled':''} aria-label="新版本灰度比例" /><div class="traffic-scale"><span>0% 稳定版本</span><span>100% 全量</span></div><button class="btn btn-danger-outline full" data-action="rollback" ${!agent.previousVersion?'disabled':''}>${agent.previousVersion?`回退到 ${agent.previousVersion}`:'暂无可回退版本'}</button>`
+    ? `<p class="aside-intro">${published?'调整只改变当前版本流量，不生成新版本。':'选择当前草稿的首次发布比例；100% 为直接全量。'}</p><label class="traffic-value" for="traffic-slider"><span>${published?'当前版本流量':'首次发布流量'}</span><output id="traffic-value">${selectedTraffic}%</output></label><div class="traffic-number-wrap"><label for="traffic-number">精确设置</label><input id="traffic-number" type="number" min="${trafficMin}" max="100" step="1" value="${selectedTraffic}" ${!canSelectTraffic?'disabled':''} /><span>%</span></div><input id="traffic-slider" class="traffic-slider" type="range" min="${trafficMin}" max="100" step="1" value="${selectedTraffic}" style="--range-progress:${selectedTraffic}%" ${!canSelectTraffic?'disabled':''} aria-label="新版本灰度比例" /><div class="traffic-scale"><span>${published?'0% 稳定版本':'1% 最小灰度'}</span><span>100% 全量</span></div><button class="btn btn-danger-outline full" data-action="rollback" ${!agent.previousVersion?'disabled':''}>${agent.previousVersion?`回退到 ${agent.previousVersion}`:'暂无可回退版本'}</button>`
     : `<p class="aside-intro">政策或知识可能过期，异常时暂停建议并转人工；问题修复后可恢复接管。</p>${agent.status==='人工兜底'
         ? `<div class="paused-note">当前处于人工兜底状态，Agent 建议已停止下发。</div><button class="btn btn-primary full" data-action="resume">恢复 Agent 接管</button>`
         : `<button class="btn btn-danger-outline full" data-action="pause" ${!agent.liveVersion?'disabled':''}>暂停建议 · 转人工</button>`}`;
@@ -326,7 +332,7 @@ function renderRelease(id, agent) {
     <div class="release-evidence"><h3>${published?'当前版本证据':'本次变化与决策证据'}</h3>${changes.map(item=>`<div class="evidence-row">• ${escapeHtml(item)}</div>`).join('')}${type==='b'?`<div class="evidence-row">审批人：${agent.approved?`${escapeHtml(agent.approvalPerson)} · 已审批（${formatTime(agent.approvedAt)}）`:'社区生态政策负责人（模拟） · 待审批'}</div>`:''}</div>
     <div class="release-checks"><div><span class="mini-check ${agent.evaluation==='passed'?'ok':''}">${agent.evaluation==='passed'?'✓':'!'}</span><div><strong>评估结果</strong><small>${evaluationText}</small></div></div>${type==='b'?`<div><span class="mini-check ${agent.approved?'ok':''}">${agent.approved?'✓':'!'}</span><div><strong>政策负责人审批</strong><small>${agent.approved?'已完成':'待完成'}</small></div></div>`:''}<div><span class="mini-check ok">✓</span><div><strong>发布记录</strong><small>版本、操作和时间保留在本地</small></div></div></div>
     ${type==='b'&&agent.evaluation==='passed'&&!agent.approved?`<div class="action-callout"><div><strong>评估已通过，等待人工审批</strong><span>由社区生态政策负责人模拟签核。</span></div><button class="btn btn-outline" data-action="approve">完成审批</button></div>`:''}
-    <div class="release-actions"><button class="btn btn-primary" data-action="publish" ${!ready||published?'disabled':''}>${published?'当前版本已发布':type==='a'?'发布至 10% 灰度':'发布新版本'}</button><button class="btn btn-outline" data-action="goView" data-view="monitor">进入监控 →</button><span>${published?'草稿与生产一致':ready?'发布条件已满足':type==='b'?'请先完成评估和审批':'请先通过当前草稿评估'}</span></div></section>
+    <div class="release-actions">${type==='a'?`<button id="release-primary" class="btn btn-primary" data-action="confirmTrafficRelease" ${!ready||published?'disabled':''}>${trafficActionLabel}</button>`:`<button class="btn btn-primary" data-action="publish" ${!ready||published?'disabled':''}>${published?'当前版本已发布':'发布新版本'}</button>`}<button class="btn btn-outline" data-action="goView" data-view="monitor">进入监控 →</button><span>${published?(type==='a'?'拖动右侧滑块可继续调整当前版本流量':'草稿与生产一致'):ready?'发布条件已满足':type==='b'?'请先完成评估和审批':'请先通过当前草稿评估'}</span></div></section>
     <aside class="panel side-panel"><h2>${type==='a'?'灰度与回退':'异常处置'}</h2>${disposal}</aside></div>
     <section class="panel history-panel"><div class="table-head"><h3>发布与处置记录</h3><span>模拟记录</span></div>${renderHistory(agent)}</section>`;
 }
@@ -462,10 +468,14 @@ app.addEventListener('click', event => {
     const name = state.agents[agentId]?.name ?? '该 Agent';
     requestConfirmation('删除此 Agent？', `「${name}」的配置、评估和发布记录将一并移除。`, '确认删除', { type: 'deleteAgent', agentId });
   }
-  else if (action === 'applyTraffic') {
+  else if (action === 'confirmTrafficRelease') {
     const input = app.querySelector('#traffic-number');
     if (!input.value.trim() || !input.validity.valid) { input.reportValidity(); return; }
-    update({ type: 'setTraffic', agentId, traffic: Number(input.value) });
+    const agent = state.agents[agentId];
+    const traffic = Number(input.value);
+    update(agent.liveVersion === agent.draftVersion
+      ? { type: 'setTraffic', agentId, traffic }
+      : { type: 'publish', agentId, traffic });
   }
   else if (action === 'setStrategy') update({ type: action, agentId, strategy: button.dataset.strategy });
   else if (action === 'runDebug') update({ type: action, agentId,
@@ -475,18 +485,35 @@ app.addEventListener('click', event => {
   else update({ type: action, agentId });
 });
 
+function syncTrafficControls(source) {
+  const slider = app.querySelector('#traffic-slider');
+  const number = app.querySelector('#traffic-number');
+  const output = app.querySelector('#traffic-value');
+  const button = app.querySelector('#release-primary');
+  const agent = state.agents[state.selectedAgent];
+  if (!slider || !number || !output || !button || !agent) return;
+  const valid = source.value.trim() !== '' && source.validity.valid;
+  if (!valid) { button.disabled = true; return; }
+  const value = Number(source.value);
+  if (source === slider) number.value = source.value;
+  else slider.value = source.value;
+  output.textContent = `${value}%`;
+  slider.style.setProperty('--range-progress', `${value}%`);
+  const published = agent.liveVersion === agent.draftVersion;
+  button.textContent = published
+    ? value === 0 ? '流量降至 0%' : value === 100 ? '全量至 100%' : `调整至 ${value}%`
+    : value === 100 ? '全量发布' : `发布至 ${value}% 灰度`;
+  button.disabled = published ? value === agent.traffic : !canPublish(state.selectedAgent, agent);
+}
+
 app.addEventListener('input', event => {
   if (event.target.id === 'agent-search') {
     const query = event.target.value.trim().toLowerCase();
     const rows = [...app.querySelectorAll('.agent-table-row')];
     rows.forEach(row => { row.hidden = !row.dataset.search.includes(query); });
     app.querySelector('.search-empty').hidden = rows.some(row => !row.hidden);
-  } else if (event.target.id === 'traffic-slider') {
-    const number = app.querySelector('#traffic-number');
-    if (number) number.value = event.target.value;
-    const output = app.querySelector('#traffic-value');
-    if (output) output.textContent = `${event.target.value}%`;
-    event.target.style.setProperty('--range-progress', `${event.target.value}%`);
+  } else if (event.target.id === 'traffic-slider' || event.target.id === 'traffic-number') {
+    syncTrafficControls(event.target);
   } else if (event.target.id === 'debug-system-prompt') {
     const preset = app.querySelector('#debug-preset');
     if (preset) preset.value = 'custom';
@@ -494,10 +521,7 @@ app.addEventListener('input', event => {
 });
 
 app.addEventListener('change', event => {
-  if (event.target.id === 'traffic-slider') {
-    if (!event.target.value.trim() || !event.target.validity.valid) { event.target.reportValidity(); return; }
-    update({ type: 'setTraffic', agentId: state.selectedAgent, traffic: Number(event.target.value) });
-  } else if (event.target.id === 'debug-preset') {
+  if (event.target.id === 'debug-preset') {
     const agent = state.agents[state.selectedAgent];
     if (!agent) return;
     const prompt = debugPromptPresets(typeFor(state.selectedAgent), agent).find(item => item.value === event.target.value)?.prompt;
@@ -509,7 +533,7 @@ app.addEventListener('change', event => {
 app.addEventListener('keydown', event => {
   if (event.target.id === 'traffic-number' && event.key === 'Enter') {
     event.preventDefault();
-    app.querySelector('[data-action="applyTraffic"]')?.click();
+    app.querySelector('#release-primary')?.click();
   }
   if (event.target.id === 'debug-input' && event.key === 'Enter' && !event.isComposing) {
     event.preventDefault();

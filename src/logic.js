@@ -590,9 +590,16 @@ export function transition(current, action) {
       agent.approvedAt = new Date().toISOString();
       next.notice = '模拟政策负责人审批已完成。';
       break;
-    case 'publish':
+    case 'publish': {
+      const releaseTraffic = type === 'a' ? Number(action.traffic ?? 10) : null;
+      const invalidTraffic = type === 'a'
+        && (!Number.isInteger(releaseTraffic) || releaseTraffic < 1 || releaseTraffic > 100);
       if (!agent || !canPublish(action.agentId, agent) || agent.liveVersion === agent.draftVersion) {
         next.notice = '发布条件未满足，请先完成评估和必要审批。';
+        break;
+      }
+      if (invalidTraffic) {
+        next.notice = '首次发布请选择 1% 至 100% 的流量。';
         break;
       }
       agent.previousVersion = agent.liveVersion;
@@ -604,11 +611,12 @@ export function transition(current, action) {
       agent.rolledBack = (agent.rolledBack ?? []).filter(item => item.version !== agent.liveVersion);
       if (type === 'b') agent.liveRuleEnabled = agent.ruleEnabled;
       if (type === 'c') agent.liveKnowledgeVersion = agent.knowledgeVersion;
-      agent.status = type === 'a' ? '灰度中' : '运行中';
-      if (type === 'a') agent.traffic = 10;
-      record(agent, '发布', type === 'a' ? '发布至 10% 模拟流量' : '切换生产版本');
-      next.notice = type === 'a' ? `${agent.liveVersion} 已发布到 10% 模拟流量。` : `${agent.liveVersion} 已发布，记录已保存。`;
+      agent.status = type === 'a' ? (releaseTraffic === 100 ? '全量运行' : '灰度中') : '运行中';
+      if (type === 'a') agent.traffic = releaseTraffic;
+      record(agent, '发布', type === 'a' ? `发布至 ${releaseTraffic}% 模拟流量` : '切换生产版本');
+      next.notice = type === 'a' ? `${agent.liveVersion} 已发布到 ${releaseTraffic}% 模拟流量。` : `${agent.liveVersion} 已发布，记录已保存。`;
       break;
+    }
     case 'setTraffic':
       if (type !== 'a' || !agent.liveVersion || !Number.isInteger(action.traffic) || action.traffic < 0 || action.traffic > 100) return current;
       if (agent.traffic === action.traffic) return current;

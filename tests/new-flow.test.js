@@ -74,6 +74,41 @@ test('release and rollback records reflect the active A version', () => {
   assert.equal(state.agents.a.releaseHistory.at(-1).action, '回退');
 });
 
+test('A publishes the evaluated draft at the selected initial gray percentage', () => {
+  let state = createInitialState();
+  state = transition(state, { type: 'evaluate', agentId: 'a' });
+  state = transition(state, { type: 'publish', agentId: 'a', traffic: 37 });
+  assert.equal(state.agents.a.liveVersion, 'v1.1');
+  assert.equal(state.agents.a.traffic, 37);
+  assert.equal(state.agents.a.status, '灰度中');
+  assert.match(state.agents.a.releaseHistory.at(-1).detail, /37%/);
+});
+
+test('traffic adjustments keep the live version while a new configuration advances it', () => {
+  let state = createInitialState();
+  state = transition(state, { type: 'evaluate', agentId: 'a' });
+  state = transition(state, { type: 'publish', agentId: 'a', traffic: 25 });
+  state = transition(state, { type: 'setTraffic', agentId: 'a', traffic: 68 });
+  assert.equal(state.agents.a.liveVersion, 'v1.1');
+  assert.equal(state.agents.a.traffic, 68);
+  assert.equal(state.agents.a.releaseHistory.at(-1).version, 'v1.1');
+
+  state = transition(state, { type: 'editPrompt', agentId: 'a', prompt: '适配更多雨天旅行场景' });
+  assert.equal(state.agents.a.draftVersion, 'v1.2');
+  state = transition(state, { type: 'evaluate', agentId: 'a' });
+  state = transition(state, { type: 'publish', agentId: 'a', traffic: 42 });
+  assert.equal(state.agents.a.liveVersion, 'v1.2');
+  assert.equal(state.agents.a.traffic, 42);
+});
+
+test('A refuses an initial publication with zero gray traffic', () => {
+  let state = createInitialState();
+  state = transition(state, { type: 'evaluate', agentId: 'a' });
+  state = transition(state, { type: 'publish', agentId: 'a', traffic: 0 });
+  assert.equal(state.agents.a.liveVersion, 'v1.0');
+  assert.equal(state.agents.a.releaseHistory.length, 0);
+});
+
 test('new agent requires a nonblank name and template', () => {
   const initial = createInitialState();
   assert.deepEqual(transition(initial, { type: 'createAgent', templateType: 'b', name: ' ' }).agents, initial.agents);
